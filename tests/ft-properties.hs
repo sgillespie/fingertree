@@ -5,6 +5,7 @@
 module Main where
 
 import Data.FingerTree    -- needs to be compiled with -DTESTING for use here
+import qualified Data.IntervalMap.FingerTree as IntervalMap
 
 import Test.Framework
 import Test.Framework.Providers.HUnit
@@ -57,6 +58,7 @@ main = defaultMainWithOpts
     , testProperty "traverse'" prop_traverse'
     , testProperty "traverseWithPos" prop_traverseWithPos
     , testProperty "traverseWithContext" prop_traverseWithContext
+    , testCase "dominators" test_dominators
     ] runner_opts
   where
     runner_opts = mempty { ropt_test_options = Just test_opts }
@@ -190,6 +192,31 @@ test_search = do
         in case search p xs of
                Position _ x _ -> Just x
                _              -> Nothing
+
+test_dominators :: Assertion
+test_dominators = do
+    IntervalMap.intersections (IntervalMap.Interval 0 10) xs
+      @?= all
+    IntervalMap.intersections' (IntervalMap.Interval 5 10) xs
+      @?= nonOverlapping
+  where
+    xs :: IntervalMap.IntervalMap Int String
+    xs = fromList [
+      (0, 10, "f"),
+      (5, 10, "g"),
+      (7, 10, "h")]
+
+    fromList :: (Ord v) => [(v, v, a)] -> IntervalMap.IntervalMap v a
+    fromList = foldr ins IntervalMap.empty
+
+    ins (lo, hi, n) = IntervalMap.insert (IntervalMap.Interval lo hi) n
+
+    all = [
+      (IntervalMap.Interval 0 10, "f"),
+      (IntervalMap.Interval 5 10, "g"),
+      (IntervalMap.Interval 7 10, "h")]
+
+    nonOverlapping = [(IntervalMap.Interval 0 10, "f")]
 
 -- ** Splitting
 

@@ -42,13 +42,13 @@ module Data.IntervalMap.FingerTree (
     -- * Interval maps
     IntervalMap, empty, singleton, insert, union,
     -- * Searching
-    search, intersections, dominators,
+    search, intersections, dominators, intersections',
     -- * Extraction
     bounds, leastView, splitAfter
     ) where
 
 import qualified Data.FingerTree as FT
-import Data.FingerTree (FingerTree, Measured(..), ViewL(..), (<|), (><))
+import Data.FingerTree (FingerTree, Measured(..), ViewL(..), ViewR(..), (<|), (><))
 
 import Prelude hiding (null)
 #if MIN_VERSION_base(4,6,0)
@@ -238,6 +238,46 @@ intersections i = inRange (low i) (high i)
 -- in lexicographical order.
 dominators :: (Ord v) => Interval v -> IntervalMap v a -> [(Interval v, a)]
 dominators i = inRange (high i) (low i)
+
+-- | /O(k log (n/\//k))/.  All non-interlapping intervals that contain the given
+-- interval, in lexicographical order.
+intersections' :: (Ord v) => Interval v -> IntervalMap v String -> [(Interval v, String)]
+intersections' i = inRange (low i) (high i)
+  where
+    inRange :: (Ord v) => v -> v -> IntervalMap v String -> [(Interval v, String)]
+    inRange lo hi (IntervalMap t) =
+      matches hi (FT.dropUntil (atleast' lo) t)
+
+    matches
+      :: (Ord v)
+      => v
+      -> FingerTree (IntInterval v) (Node v String)
+      -> [(Interval v, String)]
+    matches hi xs =
+      let xs' = FT.takeUntil (greater' hi) xs
+      in case FT.viewl xs' of
+           EmptyL -> []
+           Node i x :< xs'' ->
+             let ((i', x'), xs''') = largest (i, x) xs'
+             in (i', x') : matches hi xs'''
+
+    largest (i, x) xs =
+      let (t1, t2) = FT.split (greater (low i)) xs
+      in case FT.viewr t1 of
+        EmptyR -> undefined
+        xs' :> Node i' x' -> ((i', x'), FT.dropUntil (greater' (high i')) t2)
+
+    atleast' :: (Ord v) => v -> IntInterval v -> Bool
+    atleast' k (IntInterval i _) = k <= low i
+    atleast' _ NoInterval = error "atleast' NoInterval"
+
+    greater' :: (Ord v) => v -> IntInterval v -> Bool
+    greater' k (IntInterval _ hi) = k < hi
+    greater' _ NoInterval = error "greater NoInterval"
+
+    exact' :: (Ord v) => v -> IntInterval v -> Bool
+    exact' k (IntInterval i _) = k == low i
+    exact' _ NoInterval = error "exact NoInterval"
 
 -- | /O(k log (n/\//k))/.  All intervals that contain the given point,
 -- in lexicographical order.
